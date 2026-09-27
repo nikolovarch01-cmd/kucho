@@ -1,0 +1,180 @@
+:root{
+  --ink:#1b2c3a;
+  --card:rgba(255,255,255,.86);
+  --line:rgba(27,44,58,.14);
+  --shadow:0 8px 24px rgba(12,32,52,.18);
+}
+
+*{box-sizing:border-box}
+
+html,body{
+  margin:0;height:100%;overflow:hidden;background:#8ec9f0;color:var(--ink);
+  font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+  -webkit-user-select:none;user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:none;overscroll-behavior:none;
+}
+
+#app{position:fixed;inset:0}
+canvas{display:block}
+
+/* мек винт — леко потъмнява краищата */
+#fx{
+  position:fixed;inset:0;pointer-events:none;z-index:4;
+  background:radial-gradient(125% 105% at 50% 42%,
+    rgba(0,0,0,0) 52%, rgba(9,22,38,.16) 78%, rgba(9,22,38,.4) 100%);
+}
+
+/* ───────────── HUD ───────────── */
+.hud{
+  position:fixed;top:14px;left:14px;right:14px;z-index:6;
+  display:flex;gap:10px;justify-content:space-between;align-items:flex-start;
+  pointer-events:none;font-weight:650;
+}
+.chip{
+  background:var(--card);border:1px solid var(--line);border-radius:999px;
+  padding:8px 16px;font-size:16px;backdrop-filter:blur(10px);
+  box-shadow:var(--shadow);font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.chip b{font-weight:800}
+.chip small{opacity:.55;font-weight:600}
+.chip.flash{animation:pop .34s ease}
+@keyframes pop{
+  0%{transform:scale(1)}
+  35%{transform:scale(1.22);background:rgba(255,236,180,.97)}
+  100%{transform:scale(1)}
+}
+
+/* компас към най-близката кост */
+.compass{
+  width:66px;height:66px;border-radius:50%;position:relative;
+  background:var(--card);border:1px solid var(--line);
+  box-shadow:var(--shadow);backdrop-filter:blur(10px);
+  display:grid;place-items:center;transition:opacity .3s;
+}
+.compass.gone{opacity:0}
+.compass .ring{
+  position:absolute;inset:6px;border-radius:50%;
+  border:1px dashed rgba(27,44,58,.22);
+}
+.compass .needle{
+  font-size:22px;line-height:1;transform-origin:50% 50%;
+  transition:transform .12s linear;
+}
+.compass .km{
+  position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);
+  background:var(--ink);color:#fff;border-radius:999px;
+  font-size:11px;font-weight:700;padding:2px 9px;white-space:nowrap;
+}
+
+/* ───────────── съобщения по средата ───────────── */
+.toast{
+  position:fixed;left:50%;top:22%;transform:translate(-50%,-50%) scale(.8);
+  z-index:6;pointer-events:none;opacity:0;
+  font-size:30px;font-weight:800;letter-spacing:-.5px;color:#fff;
+  text-shadow:0 3px 14px rgba(10,30,50,.55),0 1px 0 rgba(10,30,50,.4);
+}
+.toast.on{animation:toast 1.5s ease forwards}
+@keyframes toast{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.75)}
+  18%{opacity:1;transform:translate(-50%,-50%) scale(1.06)}
+  30%{transform:translate(-50%,-50%) scale(1)}
+  75%{opacity:1}
+  100%{opacity:0;transform:translate(-50%,-115%) scale(1)}
+}
+
+/* ───────────── клавиши (само на компютър) ───────────── */
+.hint{
+  position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:6;
+  background:var(--card);border:1px solid var(--line);border-radius:999px;
+  padding:7px 18px;font-size:13px;opacity:.92;pointer-events:none;
+  backdrop-filter:blur(10px);white-space:nowrap;box-shadow:var(--shadow);
+}
+kbd{
+  background:#fff;border:1px solid var(--line);border-bottom-width:2px;
+  border-radius:6px;padding:1px 6px;font-family:inherit;font-size:12px;font-weight:700;
+  margin-right:1px;
+}
+
+/* ───────────── екрани ───────────── */
+.screen{
+  position:fixed;inset:0;z-index:10;display:grid;
+  justify-items:center;align-items:flex-end;padding-bottom:3.5vh;
+  background:radial-gradient(120% 95% at 50% 0%,rgba(255,255,255,.2),rgba(6,24,44,.5));
+  backdrop-filter:blur(2px);transition:opacity .4s ease;
+}
+.screen.hide{opacity:0;pointer-events:none}
+
+.panel{
+  background:rgba(255,255,255,.95);border-radius:26px;padding:24px 40px 26px;
+  text-align:center;max-width:min(92vw,480px);
+  box-shadow:0 28px 70px rgba(6,24,44,.36);
+}
+.panel h1{margin:0;font-size:30px;letter-spacing:-.6px}
+.panel p{margin:8px 0 0;line-height:1.5;font-size:15px;opacity:.82}
+.face{font-size:48px;line-height:1}
+.tag{font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;opacity:.45;margin:0}
+.controls{font-size:13.5px;opacity:.72;line-height:2.1;margin-top:14px}
+.big{font-size:44px;font-weight:800;margin:2px 0 0;letter-spacing:-1.4px}
+
+.btn{
+  margin-top:22px;border:0;border-radius:15px;padding:15px 36px;font-size:17px;
+  font-weight:800;color:#fff;cursor:pointer;font-family:inherit;letter-spacing:.2px;
+  background:linear-gradient(180deg,#ffb648,#f0891c);
+  box-shadow:0 6px 0 #c46c0e,0 14px 24px rgba(240,137,28,.34);
+  transition:transform .08s ease,box-shadow .08s ease;
+}
+.btn:hover{filter:brightness(1.05)}
+.btn:active{transform:translateY(4px);box-shadow:0 2px 0 #c46c0e,0 6px 12px rgba(240,137,28,.3)}
+.btn.ghost{
+  background:rgba(255,255,255,.9);color:var(--ink);box-shadow:0 4px 0 rgba(27,44,58,.16);
+  margin-left:10px;padding:15px 26px;
+}
+.err{color:#b3261e;font-size:14px;margin-top:16px}
+
+/* ───────────── управление с пръст ───────────── */
+#touch{position:fixed;inset:0;z-index:7;display:none}
+body.touch #touch{display:block}
+body.touch .hint{display:none}
+
+#stick{
+  position:absolute;width:132px;height:132px;border-radius:50%;
+  border:2px solid rgba(255,255,255,.55);background:rgba(255,255,255,.14);
+  backdrop-filter:blur(3px);opacity:0;transition:opacity .16s;
+  transform:translate(-50%,-50%);pointer-events:none;
+}
+#stick.on{opacity:1}
+#stick .knob{
+  position:absolute;left:50%;top:50%;width:58px;height:58px;border-radius:50%;
+  background:rgba(255,255,255,.9);box-shadow:0 4px 14px rgba(10,30,50,.3);
+  transform:translate(-50%,-50%);
+}
+
+.pad{position:absolute;right:20px;bottom:26px;display:flex;align-items:flex-end;gap:14px}
+.pbtn{
+  border:0;font-family:inherit;font-weight:800;color:var(--ink);
+  background:rgba(255,255,255,.86);backdrop-filter:blur(10px);
+  border-radius:50%;width:66px;height:66px;font-size:13px;
+  box-shadow:0 6px 18px rgba(10,30,50,.26);cursor:pointer;
+  display:grid;place-items:center;line-height:1.15;padding:0;
+}
+.pbtn:active,.pbtn.on{background:#ffce6a;transform:scale(.94)}
+.pbtn.big{width:88px;height:88px;font-size:15px}
+.pbtn small{display:block;font-size:17px;line-height:1}
+
+.fs{
+  position:absolute;right:16px;top:14px;
+  width:42px;height:42px;border-radius:12px;border:0;font-size:17px;
+  background:var(--card);box-shadow:var(--shadow);cursor:pointer;
+}
+
+@media (max-width:780px){
+  .chip{font-size:14px;padding:7px 13px}
+  .compass{width:56px;height:56px}
+  .compass .needle{font-size:19px}
+  .panel{padding:20px 24px 22px;border-radius:22px}
+  .panel h1{font-size:26px}
+  .panel p{font-size:14px}
+  .face{font-size:40px}
+  .big{font-size:38px}
+}
