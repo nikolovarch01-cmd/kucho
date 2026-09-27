@@ -1619,7 +1619,7 @@ function updateCamera(dt) {
   }
   if (closeUp) { camYaw += dt * 0.2; }
 
-  var dist = closeUp ? 8.2 : 9.4;
+  var dist = closeUp ? 8.8 : 9.4;
   var height = closeUp ? 2.5 : 4.1;
 
   var tx = DOG.x + Math.sin(camYaw) * dist;
@@ -1643,7 +1643,7 @@ function updateCamera(dt) {
   }
 
   var dogGround = terrainH(DOG.x, DOG.z);
-  lookNow.set(DOG.x, dogGround + DOG.y * 0.6 + (closeUp ? -0.2 : 1.25), DOG.z);
+  lookNow.set(DOG.x, dogGround + DOG.y * 0.6 + (closeUp ? -0.45 : 1.25), DOG.z);
   var lk = 1 - Math.pow(0.0004, dt);
   camLook.x += (lookNow.x - camLook.x) * lk;
   camLook.y += (lookNow.y - camLook.y) * lk;
