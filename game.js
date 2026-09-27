@@ -1452,10 +1452,10 @@ function updateDog(dt, time) {
     }
   }
 
-  // стъпки, синхронизирани с походката
+  // стъпки, синхронизирани с походката — по една на всяко докосване на лапа
   if (DOG.grounded && spd > 0.6) {
     var prev = stepPhase;
-    stepPhase += dt * (4.6 + spd * 1.05) * 2;
+    stepPhase += dt * (4.6 + spd * 1.05);
     if (Math.floor(stepPhase / Math.PI) !== Math.floor(prev / Math.PI)) {
       step(Math.min(0.16, 0.035 + spd * 0.009));
     }
