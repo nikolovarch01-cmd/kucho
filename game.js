@@ -25,6 +25,29 @@ var ARENA = 38;                                   // оградата е на ±
 var BONE_COUNT = 12;
 var POND = { x: -15, z: -13, r: 7.5, level: -1.5 }; // езерцето
 
+// колибката. Вратата гледа към средата на поляната.
+var HOUSE = {
+  x: 18, z: 14, w: 5.4, h: 3.2, d: 4.6,
+  doorW: 2.5, doorH: 2.5,
+  yaw: 0, dirX: 0, dirZ: 0,
+  outX: 0, outZ: 0, inX: 0, inZ: 0, groundY: 0
+};
+HOUSE.yaw = Math.atan2(-HOUSE.x, -HOUSE.z);
+HOUSE.dirX = Math.sin(HOUSE.yaw);
+HOUSE.dirZ = Math.cos(HOUSE.yaw);
+HOUSE.outX = HOUSE.x + HOUSE.dirX * 3.6;     // точно пред вратата
+HOUSE.outZ = HOUSE.z + HOUSE.dirZ * 3.6;
+HOUSE.inX = HOUSE.x + HOUSE.dirX * 1.6;      // вътре, с глава на прага
+HOUSE.inZ = HOUSE.z + HOUSE.dirZ * 1.6;
+HOUSE.groundY = terrainH(HOUSE.x, HOUSE.z) + 0.06;
+
+// пред колибката не слагаме нищо — иначе Кучо не може да влезе
+function nearHouse(x, z, pad) {
+  pad = pad || 0;
+  if (Math.hypot(x - HOUSE.x, z - HOUSE.z) < 5.2 + pad) { return true; }
+  return Math.hypot(x - HOUSE.outX, z - HOUSE.outZ) < 6.5 + pad;
+}
+
 function rnd(a, b) { return a + Math.random() * (b - a); }
 function pick(a) { return a[(Math.random() * a.length) | 0]; }
 function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
@@ -33,6 +56,11 @@ function lerpAngle(a, b, t) {
   var d = (b - a + Math.PI) % (Math.PI * 2);
   if (d < 0) { d += Math.PI * 2; }
   return a + (d - Math.PI) * t;
+}
+function normAngle(a) {
+  a = (a + Math.PI) % (Math.PI * 2);
+  if (a < 0) { a += Math.PI * 2; }
+  return a - Math.PI;
 }
 function fmt(sec) {
   var m = Math.floor(sec / 60), s = Math.floor(sec % 60);
@@ -320,7 +348,7 @@ function inWater(x, z, pad) {
     var inside = Math.abs(x) < ARENA && Math.abs(z) < ARENA;
     if (!inside && Math.random() > 0.35) { continue; }   // вътре в оградата е по-гъсто
     if (Math.hypot(x, z) < 3.2) { continue; }
-    if (inWater(x, z, 1.0)) { continue; }
+    if (inWater(x, z, 1.0) || nearHouse(x, z)) { continue; }
 
     dummy.position.set(x, terrainH(x, z) - 0.03, z);
     dummy.rotation.set(rnd(-0.24, 0.24), rnd(0, 6.3), rnd(-0.24, 0.24));
@@ -357,7 +385,7 @@ function inWater(x, z, pad) {
   while (placed < COUNT && guard++ < COUNT * 8) {
     var x = rnd(-ARENA, ARENA), z = rnd(-ARENA, ARENA);
     if (Math.hypot(x, z) < 3) { continue; }
-    if (inWater(x, z, 0.5)) { continue; }
+    if (inWater(x, z, 0.5) || nearHouse(x, z)) { continue; }
     var y = terrainH(x, z), s = rnd(0.7, 1.3);
 
     dummy.position.set(x, y, z);
@@ -388,10 +416,18 @@ function inWater(x, z, pad) {
   geo.translate(0, 0.75, 0);
   var mesh = new T.InstancedMesh(geo,
     addWind(new T.MeshStandardMaterial({ color: 0x6f9c3c, roughness: 1 }), 0.13), COUNT);
+  // и тръстиката е на туфи, за да не изглежда като наредена
+  var clusters = [];
+  for (var c = 0; c < 6; c++) {
+    clusters.push({ a: rnd(0, Math.PI * 2), spread: rnd(0.25, 0.6), d: POND.r + rnd(-0.5, 1.4) });
+  }
+
   var dummy = new T.Object3D();
   var placed = 0, guard = 0;
   while (placed < COUNT && guard++ < COUNT * 10) {
-    var a = rnd(0, Math.PI * 2), d = POND.r + rnd(-0.6, 1.6);
+    var cl = clusters[(Math.random() * clusters.length) | 0];
+    var a = cl.a + rnd(-cl.spread, cl.spread);
+    var d = cl.d + rnd(-1.0, 1.4);
     var x = POND.x + Math.cos(a) * d, z = POND.z + Math.sin(a) * d;
     dummy.position.set(x, terrainH(x, z) - 0.15, z);
     dummy.rotation.set(rnd(-0.16, 0.16), rnd(0, 6.3), rnd(-0.16, 0.16));
@@ -405,6 +441,131 @@ function inWater(x, z, pad) {
   mesh.instanceMatrix.needsUpdate = true;
   mesh.castShadow = true;
   scene.add(mesh);
+})();
+
+// папур — стъбло и кафява главичка, люлеят се заедно
+(function cattails() {
+  var COUNT = 80;
+  var stemGeo = new T.CylinderGeometry(0.022, 0.032, 1.9, 5);
+  stemGeo.translate(0, 0.95, 0);
+  var headGeo = new T.CapsuleGeometry(0.072, 0.24, 4, 8);
+  headGeo.translate(0, 1.66, 0);
+
+  var stems = new T.InstancedMesh(stemGeo,
+    addWind(new T.MeshStandardMaterial({ color: 0x6d9a3a, roughness: 1 }), 0.15), COUNT);
+  var heads = new T.InstancedMesh(headGeo,
+    addWind(new T.MeshStandardMaterial({ color: 0x7a4a24, roughness: 1 }), 0.15), COUNT);
+
+  // папурите растат на туфи, не в цял пръстен около езерото
+  var clumps = [];
+  for (var c = 0; c < 4; c++) {
+    clumps.push({ a: rnd(0, Math.PI * 2), spread: rnd(0.32, 0.75), d: POND.r + rnd(-0.8, 1.8) });
+  }
+
+  var dummy = new T.Object3D();
+  var placed = 0, guard = 0;
+  while (placed < COUNT && guard++ < COUNT * 12) {
+    var cl = clumps[(Math.random() * clumps.length) | 0];
+    var a = cl.a + rnd(-cl.spread, cl.spread);
+    var d = cl.d + rnd(-1.3, 1.5);
+    var x = POND.x + Math.cos(a) * d, z = POND.z + Math.sin(a) * d;
+    if (terrainH(x, z) < POND.level - 0.15) { continue; }   // не сред водата
+    dummy.position.set(x, terrainH(x, z) - 0.2, z);
+    dummy.rotation.set(rnd(-0.1, 0.1), rnd(0, 6.3), rnd(-0.1, 0.1));
+    var s = rnd(0.75, 1.25);
+    dummy.scale.set(s, s * rnd(0.85, 1.25), s);
+    dummy.updateMatrix();
+    stems.setMatrixAt(placed, dummy.matrix);
+    heads.setMatrixAt(placed, dummy.matrix);
+    placed++;
+  }
+  stems.count = heads.count = placed;
+  stems.instanceMatrix.needsUpdate = true;
+  heads.instanceMatrix.needsUpdate = true;
+  scene.add(stems, heads);
+})();
+
+// листа по водата
+(function lilyPads() {
+  var geo = new T.CircleGeometry(0.52, 12);
+  var mat = new T.MeshStandardMaterial({ color: 0x43823a, roughness: 0.8, side: T.DoubleSide });
+  for (var i = 0; i < 16; i++) {
+    var a = rnd(0, Math.PI * 2), d = rnd(1.5, POND.r - 1.2);
+    var x = POND.x + Math.cos(a) * d, z = POND.z + Math.sin(a) * d;
+    if (terrainH(x, z) < POND.level - 0.4) { continue; }
+    var pad = new T.Mesh(geo, mat);
+    pad.rotation.x = -Math.PI / 2;
+    pad.rotation.z = rnd(0, 6.3);
+    pad.position.set(x, POND.level + 0.035, z);
+    pad.scale.setScalar(rnd(0.5, 1.05));
+    pad.receiveShadow = true;
+    scene.add(pad);
+  }
+})();
+
+// рибки — кръжат бавно под повърхността
+var fishes = [];
+(function makeFish() {
+  var cols = [0xff8a2a, 0xffd166, 0xff6a44, 0xffc93c, 0xfff2c4, 0xffa0c8];
+  for (var i = 0; i < 11; i++) {
+    var g = new T.Group();
+    var col = pick(cols);
+    var mat = new T.MeshStandardMaterial({
+      color: col, roughness: 0.5, metalness: 0.05,
+      emissive: col, emissiveIntensity: 0.14
+    });
+    var body = new T.Mesh(new T.SphereGeometry(0.18, 10, 8), mat);
+    body.scale.set(0.5, 0.78, 1.6);
+    g.add(body);
+    var tail = new T.Mesh(new T.ConeGeometry(0.13, 0.26, 6), mat);
+    tail.rotation.x = Math.PI / 2;
+    tail.position.z = -0.28;
+    tail.scale.set(1, 1, 0.35);
+    g.add(tail);
+    scene.add(g);
+    fishes.push({
+      g: g, tail: tail,
+      a: rnd(0, 6.3), r: rnd(1.6, POND.r - 1.6), y: rnd(0.12, 0.42),
+      sp: rnd(0.25, 0.5) * (Math.random() < 0.5 ? 1 : -1), bob: rnd(0, 6.3)
+    });
+  }
+})();
+
+// жабки — седят на брега и подскачат от време на време
+var frogs = [];
+(function makeFrogs() {
+  var mat = new T.MeshStandardMaterial({ color: 0x5f9c34, roughness: 0.75 });
+  var bellyMat = new T.MeshStandardMaterial({ color: 0xd6e08a, roughness: 0.85 });
+  for (var i = 0; i < 4; i++) {
+    var g = new T.Group();
+    var body = new T.Mesh(new T.SphereGeometry(0.23, 12, 10), mat);
+    body.scale.set(1, 0.78, 1.15);
+    body.position.y = 0.18;
+    g.add(body);
+    var belly = new T.Mesh(new T.SphereGeometry(0.17, 10, 8), bellyMat);
+    belly.position.set(0, 0.1, 0.1);
+    belly.scale.set(1, 0.5, 1.1);
+    g.add(belly);
+    [-1, 1].forEach(function (s) {
+      var e = new T.Mesh(new T.SphereGeometry(0.075, 10, 8), DARKM);
+      e.position.set(0.13 * s, 0.34, 0.12);
+      g.add(e);
+    });
+    [-1, 1].forEach(function (s) {
+      var leg = new T.Mesh(new T.SphereGeometry(0.1, 8, 6), mat);
+      leg.position.set(0.2 * s, 0.1, -0.14);
+      leg.scale.set(0.8, 0.7, 1.5);
+      g.add(leg);
+    });
+
+    var a = rnd(0, Math.PI * 2), d = POND.r + rnd(-0.2, 2.6);
+    var x = POND.x + Math.cos(a) * d, z = POND.z + Math.sin(a) * d;
+    var home = { x: x, z: z };
+    g.position.set(x, terrainH(x, z), z);
+    g.rotation.y = rnd(0, 6.3);
+    scene.add(g);
+    frogs.push({ g: g, home: home, wait: rnd(2, 8), t: 1, fx: x, fz: z, tx: x, tz: z });
+  }
 })();
 
 // дървета
@@ -441,7 +602,7 @@ function makeTree(x, z, solid) {
   while (made < 32 && tries++ < 800) {
     var a = rnd(0, Math.PI * 2), d = rnd(17, ARENA + 3);
     var x = Math.cos(a) * d, z = Math.sin(a) * d;
-    if (inWater(x, z, 4)) { continue; }
+    if (inWater(x, z, 4) || nearHouse(x, z, 3)) { continue; }
     var ok = true;
     for (var k = 0; k < blockers.length; k++) {
       if (Math.hypot(x - blockers[k].x, z - blockers[k].z) < 6) { ok = false; break; }
@@ -458,6 +619,7 @@ function makeTree(x, z, solid) {
   while (made < 90 && tries++ < 2000) {
     var a = rnd(0, Math.PI * 2), d = rnd(ARENA + 6, ARENA + 110);
     var x = Math.cos(a) * d, z = Math.sin(a) * d;
+    if (nearHouse(x, z)) { continue; }
     var ok = true;
     for (var k = 0; k < blockers.length; k++) {
       if (Math.hypot(x - blockers[k].x, z - blockers[k].z) < 7) { ok = false; break; }
@@ -474,7 +636,7 @@ function makeTree(x, z, solid) {
   while (made < 24 && tries++ < 500) {
     var a = rnd(0, Math.PI * 2), d = rnd(15, ARENA + 2);
     var x = Math.cos(a) * d, z = Math.sin(a) * d;
-    if (inWater(x, z, 2.5)) { continue; }
+    if (inWater(x, z, 2.5) || nearHouse(x, z, 1)) { continue; }
     var ok = true;
     for (var k = 0; k < blockers.length; k++) {
       if (Math.hypot(x - blockers[k].x, z - blockers[k].z) < 4) { ok = false; break; }
@@ -504,7 +666,7 @@ function makeTree(x, z, solid) {
     var rr = rnd(0.3, 1.05);
     var a = rnd(0, Math.PI * 2), d = rnd(8, ARENA + 2);
     var x = Math.cos(a) * d, z = Math.sin(a) * d;
-    if (inWater(x, z, 0.5)) { continue; }
+    if (inWater(x, z, 0.5) || nearHouse(x, z, 0.5)) { continue; }
 
     var rock = new T.Mesh(new T.DodecahedronGeometry(rr, 0),
       new T.MeshStandardMaterial({ color: pick([0x9a9a92, 0x86867e, 0xaba99f]), roughness: 1 }));
@@ -545,50 +707,164 @@ function makeTree(x, z, solid) {
   posts.castShadow = true;
   scene.add(posts);
 
-  var railMat = new T.MeshStandardMaterial({ color: 0xb98f5a, roughness: 1 });
-  [0.58, 1.18].forEach(function (h) {
-    [[0, -ARENA, 0], [0, ARENA, 0], [-ARENA, 0, 1], [ARENA, 0, 1]].forEach(function (p) {
-      var rail = new T.Mesh(new T.BoxGeometry(p[2] ? 0.1 : ARENA * 2, 0.16, p[2] ? ARENA * 2 : 0.1), railMat);
-      rail.position.set(p[0], terrainH(p[0], p[1]) + h, p[1]);
-      rail.castShadow = true;
-      scene.add(rail);
-    });
-  });
+  // летвите вървят между два стълба и следват наклона на терена,
+  // иначе тук-там потъват в земята
+  var rails = new T.InstancedMesh(
+    new T.BoxGeometry(1, 0.15, 0.1),
+    new T.MeshStandardMaterial({ color: 0xb98f5a, roughness: 1 }),
+    n * 4 * 2
+  );
+  var d2 = new T.Object3D();
+  var from = new T.Vector3(), to = new T.Vector3(), axis = new T.Vector3(1, 0, 0);
+  var idx2 = 0;
+
+  for (var sd = 0; sd < 4; sd++) {
+    for (var k2 = 0; k2 < n; k2++) {
+      var t0 = -ARENA + k2 * SPAN, t1 = t0 + SPAN;
+      var ax, az, bx, bz;
+      if (sd === 0) { ax = t0; az = -ARENA; bx = t1; bz = -ARENA; }
+      else if (sd === 1) { ax = t0; az = ARENA; bx = t1; bz = ARENA; }
+      else if (sd === 2) { ax = -ARENA; az = t0; bx = -ARENA; bz = t1; }
+      else { ax = ARENA; az = t0; bx = ARENA; bz = t1; }
+
+      var ya = terrainH(ax, az), yb = terrainH(bx, bz);
+      [0.62, 1.24].forEach(function (hh) {
+        from.set(bx - ax, yb - ya, bz - az);
+        var len = from.length() || 1;
+        d2.position.set((ax + bx) / 2, (ya + yb) / 2 + hh, (az + bz) / 2);
+        d2.quaternion.setFromUnitVectors(axis, to.copy(from).normalize());
+        d2.scale.set(len, 1, 1);
+        d2.updateMatrix();
+        rails.setMatrixAt(idx2++, d2.matrix);
+      });
+    }
+  }
+  rails.count = idx2;
+  rails.instanceMatrix.needsUpdate = true;
+  rails.castShadow = true;
+  scene.add(rails);
 })();
 
-// колибка
+// колибка — сглобена от дъски, с отвор за врата
 (function doghouse() {
-  var HX = 18, HZ = 14;
   var g = new T.Group();
-  var wood = new T.MeshStandardMaterial({ color: 0xb5793f, roughness: 1 });
-  var woodDark = new T.MeshStandardMaterial({ color: 0x8f4a2c, roughness: 1 });
+  var W = HOUSE.w, H = HOUSE.h, D = HOUSE.d;
+  var plank = [
+    new T.MeshStandardMaterial({ color: 0x9c6b3c, roughness: 0.95 }),
+    new T.MeshStandardMaterial({ color: 0x8a5c33, roughness: 0.95 }),
+    new T.MeshStandardMaterial({ color: 0xab7845, roughness: 0.95 }),
+    new T.MeshStandardMaterial({ color: 0x936541, roughness: 0.95 })
+  ];
+  var PICK = 0;
+  function nextMat() { PICK++; return plank[PICK % plank.length]; }
 
-  var body = new T.Mesh(new T.BoxGeometry(4.6, 3.0, 3.8), wood);
-  body.position.y = 1.5;
-  body.castShadow = true; body.receiveShadow = true;
-  g.add(body);
+  var innerMat = new T.MeshStandardMaterial({ color: 0x53381f, roughness: 1 });
 
-  var roof = new T.Mesh(new T.ConeGeometry(3.95, 2.3, 4), woodDark);
-  roof.position.y = 4.15;
-  roof.rotation.y = Math.PI / 4;
-  roof.castShadow = true;
-  g.add(roof);
+  // стена от вертикални дъски; door изрязва отвор за вратата
+  function wall(width, height, door) {
+    var grp = new T.Group();
+    var pw = 0.44, gap = 0.018, step = pw + gap;
+    var n = Math.max(1, Math.round(width / step));
+    var realW = (width - gap * (n - 1)) / n;
 
-  var door = new T.Mesh(new T.CircleGeometry(0.88, 20),
-    new T.MeshStandardMaterial({ color: 0x1d120c, roughness: 1 }));
-  door.position.set(0, 1.08, 1.92);
-  g.add(door);
+    // плътна подложка отвътре — иначе се вижда между дъските
+    var inner = new T.Mesh(new T.BoxGeometry(width, height, 0.07), innerMat);
+    inner.position.set(0, height / 2, -0.11);
+    inner.receiveShadow = true;
+    if (door) {
+      // изрязваме отвора, като разделяме подложката на две + горна част
+      inner.visible = false;
+      var lw = (width - door.w) / 2;
+      [-1, 1].forEach(function (s) {
+        var p = new T.Mesh(new T.BoxGeometry(lw, height, 0.07), innerMat);
+        p.position.set(s * (door.w / 2 + lw / 2), height / 2, -0.11);
+        grp.add(p);
+      });
+      if (height > door.h) {
+        var top = new T.Mesh(new T.BoxGeometry(door.w, height - door.h, 0.07), innerMat);
+        top.position.set(0, door.h + (height - door.h) / 2, -0.11);
+        grp.add(top);
+      }
+    }
+    grp.add(inner);
 
-  var lip = new T.Mesh(new T.BoxGeometry(5.0, 0.3, 4.2),
-    new T.MeshStandardMaterial({ color: 0x9c6435, roughness: 1 }));
-  lip.position.y = 0.15;
-  lip.castShadow = true; lip.receiveShadow = true;
-  g.add(lip);
+    for (var i = 0; i < n; i++) {
+      var px = -width / 2 + realW / 2 + i * (realW + gap);
+      var h = height, y = height / 2;
+      if (door && Math.abs(px) < door.w / 2 + realW / 2) {
+        if (height - door.h < 0.25) { continue; }      // няма място над вратата
+        h = height - door.h;
+        y = door.h + h / 2;
+      }
+      var m = new T.Mesh(new T.BoxGeometry(realW, h, 0.15), nextMat());
+      m.position.set(px, y, 0);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      grp.add(m);
+    }
+    return grp;
+  }
 
-  g.position.set(HX, terrainH(HX, HZ), HZ);
-  g.rotation.y = Math.PI + Math.atan2(-HX, -HZ);
+  // под — дебел, за да не личи, че теренът е неравен
+  var deck = new T.Mesh(new T.BoxGeometry(W + 0.4, 1.4, D + 0.4), nextMat());
+  deck.position.y = -0.64;
+  deck.castShadow = true; deck.receiveShadow = true;
+  g.add(deck);
+
+  var back = wall(W, H); back.position.set(0, 0, -D / 2); g.add(back);
+  var left = wall(D, H); left.rotation.y = Math.PI / 2; left.position.set(-W / 2, 0, 0); g.add(left);
+  var right = wall(D, H); right.rotation.y = Math.PI / 2; right.position.set(W / 2, 0, 0); g.add(right);
+  var front = wall(W, H, { w: HOUSE.doorW, h: HOUSE.doorH });
+  front.position.set(0, 0, D / 2);
+  g.add(front);
+
+  // покрив: две скатове, всеки от дъски по дължината на ската
+  var OVER = 0.55, RISE = 1.9;
+  var run = W / 2 + OVER;
+  var slabLen = Math.sqrt(run * run + RISE * RISE);
+  var slope = Math.atan2(RISE, run);
+  [-1, 1].forEach(function (s) {
+    var side = new T.Group();
+    var n = 5;
+    for (var i = 0; i < n; i++) {
+      var zz = -(D / 2 + OVER) + (D + OVER * 2) * (i + 0.5) / n;
+      var m = new T.Mesh(new T.BoxGeometry(slabLen, 0.15, (D + OVER * 2) / n - 0.07), nextMat());
+      m.position.set(0, 0, zz);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      side.add(m);
+    }
+    side.rotation.z = -s * slope;
+    side.position.set(s * run / 2, H + RISE / 2, 0);
+    g.add(side);
+  });
+
+  // триъгълниците под покрива отпред и отзад, за да не се вижда небето
+  var tri = new T.Shape();
+  tri.moveTo(-W / 2 - 0.1, 0);
+  tri.lineTo(W / 2 + 0.1, 0);
+  tri.lineTo(0, RISE + 0.05);
+  tri.lineTo(-W / 2 - 0.1, 0);
+  var gableGeo = new T.ShapeGeometry(tri);
+  [-1, 1].forEach(function (s) {
+    var gm = new T.Mesh(gableGeo, innerMat);
+    gm.position.set(0, H, s * (D / 2 + 0.02));
+    if (s < 0) { gm.rotation.y = Math.PI; }
+    gm.castShadow = true;
+    g.add(gm);
+  });
+
+  // греда под покрива
+  var beam = new T.Mesh(new T.BoxGeometry(W + 0.5, 0.22, 0.24), nextMat());
+  beam.position.set(0, H - 0.06, D / 2 + 0.02);
+  beam.castShadow = true;
+  g.add(beam);
+
+  g.position.set(HOUSE.x, terrainH(HOUSE.x, HOUSE.z), HOUSE.z);
+  g.rotation.y = HOUSE.yaw;
   scene.add(g);
-  blockers.push({ x: HX, z: HZ, r: 3.0 });
+
+  blockers.push({ x: HOUSE.x, z: HOUSE.z, r: 3.35 });
 })();
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -609,6 +885,78 @@ var PINK     = std(0xe98b9a, 0.7);
 var RED      = std(0xd23b4c, 0.6);
 var WHITE    = new T.MeshBasicMaterial({ color: 0xffffff });
 
+/* Тялото и главата не са натрупани топки, а един изтеглен меш:
+   по дължината минава гръбнак, а на всеки негов връх се строи елипса.
+   Цветът на всеки връх се смята от мястото му — така коремът излиза кремав,
+   а гърбът потъмнява, без нито един външен файл. */
+function sweepMesh(spine, radial, colorAt) {
+  var n = spine.length;
+  var verts = [], cols = [], idx = [];
+  var col = new T.Color();
+
+  for (var i = 0; i < n; i++) {
+    var a = spine[Math.max(0, i - 1)];
+    var b = spine[Math.min(n - 1, i + 1)];
+    var ty = b.y - a.y, tz = b.z - a.z;
+    var tl = Math.sqrt(ty * ty + tz * tz) || 1;
+    ty /= tl; tz /= tl;
+    var py = tz, pz = -ty;                    // перпендикулярът в равнината YZ
+    var s = spine[i];
+
+    for (var j = 0; j < radial; j++) {
+      var ang = j / radial * Math.PI * 2;
+      var c = Math.cos(ang), sn = Math.sin(ang);
+      verts.push(c * s.rx, s.y + sn * s.ry * py, s.z + sn * s.ry * pz);
+      colorAt(col, sn, i / (n - 1));
+      cols.push(col.r, col.g, col.b);
+    }
+  }
+
+  for (var i2 = 0; i2 < n - 1; i2++) {
+    for (var j2 = 0; j2 < radial; j2++) {
+      var j3 = (j2 + 1) % radial;
+      var A = i2 * radial + j2, B = i2 * radial + j3;
+      var C = (i2 + 1) * radial + j3, D = (i2 + 1) * radial + j2;
+      idx.push(A, B, C, A, C, D);
+    }
+  }
+
+  // затваряме двата края, за да не се вижда вътре
+  var c1 = verts.length / 3;
+  verts.push(0, spine[0].y, spine[0].z);
+  colorAt(col, -1, 0); cols.push(col.r, col.g, col.b);
+  for (var j4 = 0; j4 < radial; j4++) { idx.push(c1, (j4 + 1) % radial, j4); }
+
+  var last = (n - 1) * radial;
+  var c2 = verts.length / 3;
+  verts.push(0, spine[n - 1].y, spine[n - 1].z);
+  colorAt(col, 1, 1); cols.push(col.r, col.g, col.b);
+  for (var j5 = 0; j5 < radial; j5++) { idx.push(c2, last + j5, last + (j5 + 1) % radial); }
+
+  var g = new T.BufferGeometry();
+  g.setAttribute('position', new T.Float32BufferAttribute(verts, 3));
+  g.setAttribute('color', new T.Float32BufferAttribute(cols, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+// радиусът на профила на дадена височина — ползва се, за да залепим очи и уши за повърхността
+function profileAt(spine, z) {
+  for (var i = 0; i < spine.length - 1; i++) {
+    var a = spine[i], b = spine[i + 1];
+    if (z >= Math.min(a.z, b.z) && z <= Math.max(a.z, b.z)) {
+      var t = (z - a.z) / ((b.z - a.z) || 1);
+      return { y: a.y + (b.y - a.y) * t, rx: a.rx + (b.rx - a.rx) * t, ry: a.ry + (b.ry - a.ry) * t };
+    }
+  }
+  return spine[spine.length - 1];
+}
+
+var FUR_C = new T.Color(0xdfa250);
+var FURDARK_C = new T.Color(0xa76f36);
+var CREAM_C = new T.Color(0xfff0d4);
+
 var dogRoot = new T.Group();   // позиция и посока
 var dogTilt = new T.Group();   // наклон около центъра на тялото
 var dogBody = new T.Group();   // подскачане
@@ -618,97 +966,112 @@ dogRoot.add(dogTilt);
 dogTilt.add(dogBody);
 scene.add(dogRoot);
 
-// тяло
-var torso = new T.Mesh(new T.CapsuleGeometry(0.55, 0.92, 6, 18), FUR);
-torso.rotation.x = Math.PI / 2;
-torso.position.set(0, 1.22, 0);
-dogBody.add(torso);
+// тялото: един изтеглен меш от основата на опашката до горната част на врата
+var BODY_SPINE = [
+  { y: 1.32, z: -1.03, rx: 0.19, ry: 0.18 },
+  { y: 1.30, z: -0.85, rx: 0.44, ry: 0.42 },
+  { y: 1.27, z: -0.56, rx: 0.56, ry: 0.52 },   // хълбок
+  { y: 1.23, z: -0.18, rx: 0.54, ry: 0.52 },
+  { y: 1.20, z: 0.20, rx: 0.51, ry: 0.50 },    // кръст
+  { y: 1.21, z: 0.54, rx: 0.54, ry: 0.53 },    // гърди
+  { y: 1.25, z: 0.80, rx: 0.47, ry: 0.46 },    // рамо
+  { y: 1.41, z: 0.88, rx: 0.39, ry: 0.38 },    // начало на врата
+  { y: 1.65, z: 0.90, rx: 0.35, ry: 0.34 },
+  { y: 1.89, z: 0.86, rx: 0.34, ry: 0.33 },
+  { y: 2.08, z: 0.80, rx: 0.33, ry: 0.32 }     // горна част на врата, влиза в главата
+];
 
-var chest = new T.Mesh(new T.SphereGeometry(0.5, 16, 12), FUR);
-chest.position.set(0, 1.22, 0.58);
-chest.scale.set(1.02, 0.96, 0.95);
-dogBody.add(chest);
-
-var rump = new T.Mesh(new T.SphereGeometry(0.47, 16, 12), FUR);
-rump.position.set(0, 1.24, -0.6);
-rump.scale.set(1.0, 0.98, 1.0);
-dogBody.add(rump);
-
-var belly = new T.Mesh(new T.SphereGeometry(0.44, 16, 12), CREAM);
-belly.position.set(0, 1.0, 0.14);
-belly.scale.set(0.98, 0.66, 1.55);
-dogBody.add(belly);
-
-// врат
-var neck = new T.Mesh(new T.CapsuleGeometry(0.33, 0.3, 5, 12), FUR);
-neck.position.set(0, 1.7, 0.72);
-neck.rotation.x = 0.42;
-dogBody.add(neck);
+var bodyMesh = new T.Mesh(
+  sweepMesh(BODY_SPINE, 16, function (col, sn, t) {
+    col.copy(FUR_C);
+    col.lerp(CREAM_C, Math.pow(Math.max(0, -sn), 1.5) * 0.92);     // корем
+    col.lerp(FURDARK_C, Math.pow(Math.max(0, sn), 2.4) * 0.42);    // гръб
+    col.lerp(FURDARK_C, Math.max(0, 1 - t * 6) * 0.28);            // около опашката
+  }),
+  new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.88 })
+);
+dogBody.add(bodyMesh);
 
 // глава
 var head = new T.Group();
-head.position.set(0, 2.16, 0.96);
+head.position.set(0, 2.22, 0.94);
 dogBody.add(head);
 
-var skull = new T.Mesh(new T.SphereGeometry(0.5, 22, 18), FUR);
-skull.scale.set(1, 0.97, 1.0);
-head.add(skull);
+// от задната част на черепа до върха на носа — също един меш
+var HEAD_SPINE = [
+  { y: 0.03, z: -0.44, rx: 0.24, ry: 0.26 },
+  { y: 0.00, z: -0.24, rx: 0.42, ry: 0.43 },
+  { y: -0.02, z: 0.00, rx: 0.50, ry: 0.50 },   // череп
+  { y: -0.05, z: 0.19, rx: 0.47, ry: 0.44 },   // вежди
+  { y: -0.12, z: 0.33, rx: 0.33, ry: 0.29 },   // начало на муцуната
+  { y: -0.16, z: 0.48, rx: 0.26, ry: 0.22 },
+  { y: -0.17, z: 0.60, rx: 0.20, ry: 0.17 },
+  { y: -0.15, z: 0.68, rx: 0.10, ry: 0.09 }    // връх на муцуната
+];
 
-var cheekL = new T.Mesh(new T.SphereGeometry(0.22, 12, 10), FUR);
-cheekL.position.set(-0.36, -0.1, 0.16); cheekL.scale.set(0.9, 0.8, 1.1);
-head.add(cheekL);
-var cheekR = cheekL.clone(); cheekR.position.x = 0.36;
-head.add(cheekR);
+var headMesh = new T.Mesh(
+  sweepMesh(HEAD_SPINE, 16, function (col, sn, t) {
+    col.copy(FUR_C);
+    var muzzle = clamp((t - 0.5) / 0.3, 0, 1);                     // муцуната е кремава
+    col.lerp(CREAM_C, muzzle * 0.95);
+    col.lerp(FURDARK_C, Math.pow(Math.max(0, sn), 2.4) * (1 - muzzle) * 0.5);
+  }),
+  new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.88 })
+);
+head.add(headMesh);
 
-var crown = new T.Mesh(new T.SphereGeometry(0.27, 14, 12), FUR_DARK);
-crown.position.set(0, 0.22, -0.13);
-crown.scale.set(1.18, 0.6, 1.0);
-head.add(crown);
-
-var muzzle = new T.Mesh(new T.SphereGeometry(0.29, 18, 14), CREAM);
-muzzle.position.set(0, -0.13, 0.37);
-muzzle.scale.set(0.94, 0.82, 1.2);
-head.add(muzzle);
-
-var nose = new T.Mesh(new T.SphereGeometry(0.11, 14, 12), DARKM);
-nose.position.set(0, -0.06, 0.68);
-nose.scale.set(1.2, 0.88, 0.92);
+// нос и уста
+var nose = new T.Mesh(new T.SphereGeometry(0.1, 14, 12), DARKM);
+nose.position.set(0, -0.145, 0.655);
+nose.scale.set(1.2, 0.95, 0.9);
 head.add(nose);
 
-var mouth = new T.Mesh(new T.SphereGeometry(0.12, 12, 10), PINK);
-mouth.position.set(0, -0.29, 0.62);
+var mouth = new T.Mesh(new T.SphereGeometry(0.11, 12, 10), PINK);
+mouth.position.set(0, -0.25, 0.52);
 mouth.scale.set(0.78, 0.42, 1.05);
 head.add(mouth);
 
-// очи — пазят се, за да могат да мигат
+// място върху повърхността на главата — за очи и уши
+function headPoint(z, ang, outward) {
+  var p = profileAt(HEAD_SPINE, z);
+  var k = outward === undefined ? 1 : outward;
+  return new T.Vector3(Math.cos(ang) * p.rx * k, p.y + Math.sin(ang) * p.ry * k, z);
+}
+
+// очи — залепени за повърхността на главата, пазят се, за да могат да мигат
 var eyes = [];
 [-1, 1].forEach(function (s) {
-  var eye = new T.Mesh(new T.SphereGeometry(0.1, 14, 12), DARKM);
-  eye.position.set(0.235 * s, 0.1, 0.38);
+  var ang = s > 0 ? 0.6 : Math.PI - 0.6;
+
+  var p = headPoint(0.24, ang, 0.93);
+  var eye = new T.Mesh(new T.SphereGeometry(0.115, 14, 12), DARKM);
+  eye.scale.set(1, 1.06, 0.85);
+  eye.position.copy(p);
   head.add(eye);
 
-  var hl = new T.Mesh(new T.SphereGeometry(0.036, 8, 8), WHITE);
-  hl.position.set(0.235 * s + 0.03, 0.14, 0.455);
+  var hl = new T.Mesh(new T.SphereGeometry(0.04, 8, 8), WHITE);
+  hl.position.set(p.x * 1.16, p.y + 0.05, p.z + 0.065);
   head.add(hl);
 
-  var brow = new T.Mesh(new T.SphereGeometry(0.15, 12, 10), FUR_DARK);
-  brow.position.set(0.28 * s, 0.27, 0.17);
-  brow.scale.set(1, 0.52, 0.9);
+  var brow = new T.Mesh(new T.SphereGeometry(0.14, 12, 10), FUR_DARK);
+  brow.position.copy(headPoint(0.13, ang + 0.26, 0.86));
+  brow.scale.set(1, 0.48, 0.8);
   head.add(brow);
 
   eyes.push({ ball: eye, hl: hl });
 });
 
-// уши
+// уши — висят отстрани на главата
 var ears = [];
 [-1, 1].forEach(function (s) {
+  var ang = s > 0 ? 0.44 : Math.PI - 0.44;
   var ear = new T.Group();
-  ear.position.set(0.38 * s, 0.22, -0.02);
-  var flap = new T.Mesh(new T.SphereGeometry(0.32, 14, 12), FUR_DARK);
-  flap.scale.set(0.36, 1.2, 0.78);
-  flap.position.set(0.06 * s, -0.38, 0);
+  ear.position.copy(headPoint(-0.1, ang, 0.9));
+  var flap = new T.Mesh(new T.SphereGeometry(0.34, 14, 12), FUR_DARK);
+  flap.scale.set(0.38, 1.25, 0.8);
+  flap.position.set(0.05 * s, -0.4, 0);
   ear.add(flap);
-  var base = 0.34 * s;
+  var base = 0.3 * s;
   ear.rotation.z = base;
   head.add(ear);
   ears.push({ obj: ear, base: base, side: s });
@@ -744,7 +1107,7 @@ var legs = [];
 // опашка от три части — маха като камшик
 var wag = [], tilt = [];
 (function tail() {
-  var parent = dogBody, y = 1.72, z = -0.86;
+  var parent = dogBody, y = 1.36, z = -0.98;
   var dims = [[0.15, 0.2], [0.118, 0.17], [0.09, 0.14]];
   var angles = [-0.78, -0.34, -0.3];
   var offsets = [0, 0.4, 0.34];
@@ -774,17 +1137,20 @@ var wag = [], tilt = [];
 })();
 
 // нашийник с медальон — пръстенът е перпендикулярен на врата
-var collar = new T.Mesh(new T.TorusGeometry(0.365, 0.075, 10, 26), RED);
-collar.position.set(0, 1.75, 0.74);
-collar.rotation.x = -1.12;
+var collar = new T.Mesh(new T.TorusGeometry(0.4, 0.075, 10, 26), RED);
+collar.position.set(0, 1.72, 0.87);
+collar.rotation.x = -1.42;
 dogBody.add(collar);
 
 var tag = new T.Mesh(new T.SphereGeometry(0.085, 12, 10),
   new T.MeshStandardMaterial({ color: 0xffcf4d, roughness: 0.28, metalness: 0.75 }));
-tag.position.set(0, 1.56, 1.0);
+tag.position.set(0, 1.58, 1.06);
 dogBody.add(tag);
 
 dogRoot.traverse(function (o) { if (o.isMesh) { o.castShadow = true; } });
+
+// Кучо е малко кученце — смаляваме го, без да пипаме пропорциите
+dogRoot.scale.setScalar(0.84);
 
 /* ══════════════════════════════════════════════════════════════════════════
    7. КОСТИ
@@ -951,27 +1317,50 @@ function updatePool(list, dt, floorY) {
 
 var butterflies = [];
 (function makeButterflies() {
-  var wingGeo = new T.SphereGeometry(0.16, 6, 5);
-  var cols = [0xfff0a0, 0xffb0d0, 0xa8e0ff, 0xffd08a, 0xd8b0ff];
-  for (var i = 0; i < 14; i++) {
+  var wingGeo = new T.SphereGeometry(0.17, 9, 7);
+  var cols = [0xfff0a0, 0xffb0d0, 0xa8e0ff, 0xffd08a, 0xd8b0ff, 0xffe08a];
+  for (var i = 0; i < 16; i++) {
     var g = new T.Group();
+    var col = pick(cols);
     var mat = new T.MeshStandardMaterial({
-      color: pick(cols), roughness: 0.6, side: T.DoubleSide,
-      emissive: 0x442200, emissiveIntensity: 0.2
+      color: col, roughness: 0.55, side: T.DoubleSide,
+      emissive: col, emissiveIntensity: 0.28
     });
-    var wl = new T.Mesh(wingGeo, mat); wl.scale.set(1.5, 0.5, 0.9);
-    var wr = wl.clone();
-    g.add(wl, wr);
+    var edgeMat = new T.MeshStandardMaterial({
+      color: 0x4a3524, roughness: 0.7, side: T.DoubleSide
+    });
 
+    // тънко телце по посоката на полета
     var body = new T.Mesh(new T.SphereGeometry(0.05, 6, 5), DARKM);
-    body.scale.set(0.7, 0.7, 2.2);
+    body.scale.set(0.75, 0.75, 2.4);
     g.add(body);
+
+    // по едно крило от всяка страна, закачено за тялото, за да маха нагоре-надолу
+    var hinges = [];
+    [-1, 1].forEach(function (s) {
+      var hinge = new T.Group();
+      hinge.position.set(0.045 * s, 0.01, 0);
+
+      var w = new T.Mesh(wingGeo, mat);
+      w.scale.set(1.3, 0.26, 0.92);
+      w.position.set(0.17 * s, 0, -0.02);
+      w.rotation.y = -0.22 * s;
+      hinge.add(w);
+
+      var tip = new T.Mesh(wingGeo, edgeMat);      // тъмна ивица по ръба
+      tip.scale.set(0.5, 0.2, 0.5);
+      tip.position.set(0.31 * s, -0.005, 0.04);
+      hinge.add(tip);
+
+      g.add(hinge);
+      hinges.push(hinge);
+    });
 
     var hx = rnd(-ARENA + 4, ARENA - 4), hz = rnd(-ARENA + 4, ARENA - 4);
     if (inWater(hx, hz, 2)) { hx += 12; }
     scene.add(g);
     butterflies.push({
-      g: g, wl: wl, wr: wr, hx: hx, hz: hz,
+      g: g, wl: hinges[1], wr: hinges[0], hx: hx, hz: hz,
       t: rnd(0, 20), sp: rnd(0.35, 0.7), r: rnd(3, 9), flap: rnd(11, 17), y: rnd(1.1, 2.6)
     });
   }
@@ -1149,8 +1538,17 @@ var state = 'menu';                 // menu | playing | won
 var score = 0, elapsed = 0, finalTime = 0, barkTimer = 0, camYaw = Math.PI;
 var shake = 0;
 
-var DOG = { x: 0, y: 0, z: 0, yaw: 0, vy: 0, speed: 0, grounded: true };
+var DOG = { x: 0, y: 0, z: 0, yaw: 0, vy: 0, speed: 0, grounded: true, airT: 0 };
 var stepPhase = 0, dustTimer = 0, blinkTimer = rnd(2, 5), blink = 0;
+var squash = 0;                                  // >0 разтегнато, <0 смачкано
+var lookYaw = 0, lookTimer = rnd(2, 4);
+var headYaw = 0, headPitch = 0;
+
+// как Кучо се прибира в колибката
+var home = { on: false, t: 1, dir: 1, fromX: 0, fromZ: 0, fromYaw: 0 };
+
+// игра с пеперуда
+var play = { on: false, t: 0, next: rnd(7, 14), bf: null, hop: 1 };
 
 var input = { mx: 0, mz: 0, run: false, jump: false };
 
@@ -1220,7 +1618,7 @@ function onTouchMove(e) {
       stick.x = dx / STICK_R;
       stick.y = dy / STICK_R;
     } else if (camTouch && camTouch.id === id) {
-      camYaw += (t.clientX - camTouch.x0) * 0.008;
+      camYaw -= (t.clientX - camTouch.x0) * 0.008;
       camTouch.x0 = t.clientX;
     }
   }
@@ -1302,7 +1700,7 @@ renderer.domElement.addEventListener('pointerdown', function (e) {
 });
 window.addEventListener('pointermove', function (e) {
   if (!dragging || isTouch) { return; }
-  camYaw += (e.clientX - lastX) * 0.0055;
+  camYaw -= (e.clientX - lastX) * 0.0055;
   lastX = e.clientX;
 });
 window.addEventListener('pointerup', function () { dragging = false; });
@@ -1355,9 +1753,16 @@ function toast(text) {
 function resetGame() {
   score = 0; elapsed = 0; finalTime = 0; barkTimer = 0; shake = 0;
   DOG.x = 0; DOG.y = 0; DOG.z = 0; DOG.yaw = 0;
-  DOG.vy = 0; DOG.speed = 0; DOG.grounded = true;
+  DOG.vy = 0; DOG.speed = 0; DOG.grounded = true; DOG.airT = 0;
   camYaw = Math.PI;
   stick.x = 0; stick.y = 0;
+  squash = 0;
+  headYaw = 0; headPitch = 0;
+  lookYaw = 0; lookTimer = rnd(2, 4);
+  home.on = false; home.t = 1; home.dir = 1;
+  play.on = false; play.t = 0; play.next = rnd(7, 14);
+  if (play.bf) { play.bf.play = false; play.bf = null; }
+  dogBody.scale.set(1, 1, 1);
   dogRoot.position.set(0, 0, 0);
   dogRoot.rotation.y = 0;
 
@@ -1381,56 +1786,163 @@ function resetGame() {
   camera.updateProjectionMatrix();
 }
 
+/* Колибката: щом Кучо стигне до вратата, влиза вътре и се подава само главата му. */
+function tryEnterHome() {
+  if (home.on || state !== 'playing') { return; }
+  var dx = DOG.x - HOUSE.outX, dz = DOG.z - HOUSE.outZ;
+  if (dx * dx + dz * dz < 2.6) {
+    home.on = true; home.dir = 1; home.t = 0;
+    home.fromX = DOG.x; home.fromZ = DOG.z; home.fromYaw = DOG.yaw;
+    DOG.speed = 0;
+    bark(rnd(0.85, 1.0));
+  }
+}
+
+function updateHome(dt, moving) {
+  home.t = Math.min(1, home.t + dt / 0.55);
+  var e = home.t * home.t * (3 - 2 * home.t);        // плавно тръгване и спиране
+  var tx = home.dir > 0 ? HOUSE.inX : HOUSE.outX;
+  var tz = home.dir > 0 ? HOUSE.inZ : HOUSE.outZ;
+
+  DOG.x = home.fromX + (tx - home.fromX) * e;
+  DOG.z = home.fromZ + (tz - home.fromZ) * e;
+  DOG.yaw = lerpAngle(home.fromYaw, HOUSE.yaw, e);
+
+  if (home.t >= 1) {
+    if (home.dir > 0 && moving) {                    // играчът понечи да тръгне — излизаме
+      home.dir = -1; home.t = 0;
+      home.fromX = DOG.x; home.fromZ = DOG.z; home.fromYaw = DOG.yaw;
+      bark(rnd(1.0, 1.15));
+    } else if (home.dir < 0) {
+      home.on = false;
+      DOG.yaw = HOUSE.yaw;
+    }
+  }
+}
+
+/* Игра с пеперуда: понякога една пеперуда долита и Кучо подскача след нея. */
+function updatePlay(dt, time) {
+  if (state !== 'playing' || home.on) {
+    if (play.bf) { play.bf.play = false; play.bf = null; }
+    play.on = false;
+    return;
+  }
+
+  if (!play.on) {
+    play.next -= dt;
+    if (play.next <= 0 && DOG.speed < 0.6) {
+      play.on = true;
+      play.t = rnd(3.5, 6.5);
+      play.hop = 0.7;
+      play.bf = butterflies[(Math.random() * butterflies.length) | 0];
+      play.bf.play = true;
+    }
+    return;
+  }
+
+  play.t -= dt;
+  var bf = play.bf;
+  var a = time * 1.6;
+  var r = 2.0 + Math.sin(time * 0.9) * 0.75;
+  var gy = terrainH(DOG.x, DOG.z);
+  bf.g.position.set(
+    DOG.x + Math.cos(a) * r,
+    gy + 1.45 + Math.sin(time * 2.4) * 0.5,
+    DOG.z + Math.sin(a) * r
+  );
+  bf.g.rotation.set(0, -a, 0.18);
+  var flap = 0.45 + 0.45 * Math.sin(time * 15);
+  bf.wl.rotation.z = flap;
+  bf.wr.rotation.z = -flap;
+
+  play.hop -= dt;
+  if (play.hop <= 0 && DOG.grounded) {
+    play.hop = rnd(0.95, 1.7);
+    DOG.vy = 4.4;
+    DOG.grounded = false;
+    DOG.airT = 0;
+    squash = 0.7;
+    bark(rnd(1.15, 1.4));
+  }
+
+  if (play.t <= 0) {
+    play.on = false;
+    play.next = rnd(8, 16);
+    bf.play = false;
+    play.bf = null;
+  }
+}
+
 function updateDog(dt, time) {
   var mz = clamp(input.mz, -1, 1);      // напред
   var mx = clamp(input.mx, -1, 1);      // настрани
   var moving = (Math.abs(mz) > 0.06 || Math.abs(mx) > 0.06);
   var run = input.run;
 
-  if (moving) {
-    var s = Math.sin(camYaw), c = Math.cos(camYaw);
-    var dx = (-s) * mz + (c) * mx;
-    var dz = (-c) * mz + (-s) * mx;
-    var len = Math.sqrt(dx * dx + dz * dz) || 1;
-    DOG.yaw = lerpAngle(DOG.yaw, Math.atan2(dx / len, dz / len), 1 - Math.pow(0.0002, dt));
+  if (home.on) {
+    updateHome(dt, moving);             // движението го поема колибката
+    moving = false;
+    DOG.speed = 0;
+  } else {
+    if (moving) {
+      var s = Math.sin(camYaw), c = Math.cos(camYaw);
+      var dx = (-s) * mz + (c) * mx;
+      var dz = (-c) * mz + (-s) * mx;
+      var len = Math.sqrt(dx * dx + dz * dz) || 1;
+      DOG.yaw = lerpAngle(DOG.yaw, Math.atan2(dx / len, dz / len), 1 - Math.pow(0.0002, dt));
+    }
+
+    var maxSpeed = moving ? (run ? 12.6 : 6.4) : 0;
+    DOG.speed = approach(DOG.speed, maxSpeed, moving ? 7.5 : 9.5, dt);
+    if (DOG.speed < 0.02) { DOG.speed = 0; }
+
+    DOG.x += Math.sin(DOG.yaw) * DOG.speed * dt;
+    DOG.z += Math.cos(DOG.yaw) * DOG.speed * dt;
+
+    tryEnterHome();
   }
 
-  var maxSpeed = moving ? (run ? 12.6 : 6.4) : 0;
-  DOG.speed = approach(DOG.speed, maxSpeed, moving ? 7.5 : 9.5, dt);
-  if (DOG.speed < 0.02) { DOG.speed = 0; }
-
-  DOG.x += Math.sin(DOG.yaw) * DOG.speed * dt;
-  DOG.z += Math.cos(DOG.yaw) * DOG.speed * dt;
-
   // скок
-  if (input.jump && DOG.grounded && state === 'playing') {
+  if (!home.on && input.jump && DOG.grounded && state === 'playing') {
     DOG.vy = 10.8;
     DOG.grounded = false;
+    DOG.airT = 0;
+    squash = 1.0;                        // разтегля се при отскок
+    step(0.22);
   }
   DOG.vy -= 30 * dt;
   DOG.y += DOG.vy * dt;
+  if (!DOG.grounded) { DOG.airT += dt; }
   if (DOG.y <= 0) {
-    if (!DOG.grounded) { shake = Math.min(0.5, 0.16 + DOG.speed * 0.012); step(0.3); }
+    if (!DOG.grounded) {
+      shake = Math.min(0.5, 0.16 + DOG.speed * 0.012);
+      step(0.3);
+      squash = -1.15;                    // смачква се при приземяване
+      DOG.airT = 0;
+    }
     DOG.y = 0; DOG.vy = 0; DOG.grounded = true;
   }
+  squash = approach(squash, 0, 7.5, dt);
 
-  // граници и препятствия
-  var lim = ARENA - 1.2;
-  DOG.x = clamp(DOG.x, -lim, lim);
-  DOG.z = clamp(DOG.z, -lim, lim);
+  if (!home.on) {
+    // граници и препятствия
+    var lim = ARENA - 1.2;
+    DOG.x = clamp(DOG.x, -lim, lim);
+    DOG.z = clamp(DOG.z, -lim, lim);
 
-  for (var i = 0; i < blockers.length; i++) {
-    var b = blockers[i];
-    var bx = DOG.x - b.x, bz = DOG.z - b.z;
-    var bd = Math.sqrt(bx * bx + bz * bz);
-    var min = b.r + 0.62;
-    if (bd < min && bd > 0.0001) {
-      DOG.x += (bx / bd) * (min - bd);
-      DOG.z += (bz / bd) * (min - bd);
+    for (var i = 0; i < blockers.length; i++) {
+      var b = blockers[i];
+      var bx = DOG.x - b.x, bz = DOG.z - b.z;
+      var bd = Math.sqrt(bx * bx + bz * bz);
+      var min = b.r + 0.62;
+      if (bd < min && bd > 0.0001) {
+        DOG.x += (bx / bd) * (min - bd);
+        DOG.z += (bz / bd) * (min - bd);
+      }
     }
   }
 
-  var ground = terrainH(DOG.x, DOG.z);
+  var ground = home.on ? HOUSE.groundY : terrainH(DOG.x, DOG.z);
   dogRoot.position.set(DOG.x, ground + DOG.y, DOG.z);
   dogRoot.rotation.y = DOG.yaw;
 
@@ -1440,16 +1952,30 @@ function updateDog(dt, time) {
   var gait = time * (4.6 + spd * 1.05);
   var amp = Math.min(0.5, spd * 0.062);
 
-  for (var L = 0; L < 4; L++) {
-    var ph = gait + (L === 0 || L === 3 ? 0 : Math.PI);
-    var leg = legs[L];
-    if (DOG.grounded) {
-      leg.hip.rotation.x = Math.sin(ph) * amp;
-      leg.knee.rotation.x = Math.max(0, -Math.cos(ph)) * 0.95 * Math.min(1, spd / 3) + 0.06;
-    } else {
-      leg.hip.rotation.x = (L < 2 ? -0.62 : 0.66);
-      leg.knee.rotation.x = (L < 2 ? 0.75 : 0.95);
+  if (DOG.grounded) {
+    for (var L = 0; L < 4; L++) {
+      var ph = gait + (L === 0 || L === 3 ? 0 : Math.PI);
+      legs[L].hip.rotation.x = Math.sin(ph) * amp;
+      legs[L].knee.rotation.x = Math.max(0, -Math.cos(ph)) * 0.95 * Math.min(1, spd / 3) + 0.06;
     }
+  } else {
+    /* Във въздуха Кучо скача като куче: първо прибира предните крака,
+       после задните, а преди да кацне подава предните напред. */
+    var p = clamp(DOG.airT / 0.72, 0, 1);
+    var frontTuck = clamp(p / 0.2, 0, 1);
+    var pushOff = clamp(p / 0.3, 0, 1);
+    var backTuck = clamp((p - 0.25) / 0.35, 0, 1);
+    var reach = clamp((p - 0.58) / 0.42, 0, 1);
+
+    var fHip = -0.9 * frontTuck + 0.62 * reach;
+    var fKnee = 0.95 * frontTuck - 0.55 * reach + 0.06;
+    var bHip = 0.85 * pushOff - 1.2 * backTuck + 0.75 * reach;
+    var bKnee = 0.12 * pushOff + 0.7 * backTuck - 0.45 * reach + 0.06;
+
+    legs[0].hip.rotation.x = legs[1].hip.rotation.x = fHip;
+    legs[0].knee.rotation.x = legs[1].knee.rotation.x = fKnee;
+    legs[2].hip.rotation.x = legs[3].hip.rotation.x = bHip;
+    legs[2].knee.rotation.x = legs[3].knee.rotation.x = bKnee;
   }
 
   // стъпки, синхронизирани с походката — по една на всяко докосване на лапа
@@ -1479,9 +2005,12 @@ function updateDog(dt, time) {
   var bob = DOG.grounded ? Math.abs(Math.sin(gait)) * Math.min(0.1, spd * 0.013) : 0;
   dogBody.position.y = -1.2 + bob;
 
+  // свиване и разтягане — тялото диша с движението
+  dogBody.scale.set(1 - squash * 0.1, 1 + squash * 0.13, 1 - squash * 0.1);
+
   dogTilt.rotation.x = DOG.grounded
     ? Math.min(0.1, spd * 0.009) + Math.sin(gait * 0.5) * 0.018 * spdR
-    : -0.16;
+    : -0.3 + 0.62 * clamp(DOG.airT / 0.72, 0, 1);      // носете нагоре при отскок, после надолу
   dogTilt.rotation.z = Math.sin(gait * 0.5) * 0.035 * spdR;
 
   // опашка — трите части махат с малко закъснение
@@ -1492,10 +2021,26 @@ function updateDog(dt, time) {
   }
   tilt[0].rotation.x = -0.78 + spdR * 0.34 + Math.sin(time * wagSpd * 0.5) * 0.08;
 
-  // глава
+  // глава — гледа накъдето има нещо интересно
+  var wantYaw = 0, wantPitch = 0;
+  if (play.on && play.bf) {
+    var bdx = play.bf.g.position.x - DOG.x;
+    var bdz = play.bf.g.position.z - DOG.z;
+    var bdy = play.bf.g.position.y - (ground + 1.9);
+    wantYaw = normAngle(Math.atan2(bdx, bdz) - DOG.yaw);
+    wantPitch = clamp(-bdy * 0.4, -0.5, 0.3);
+  } else if (!home.on && spd < 0.5) {
+    lookTimer -= dt;                     // оглежда се, докато си почива
+    if (lookTimer <= 0) { lookTimer = rnd(1.6, 3.6); lookYaw = rnd(-0.8, 0.8); }
+    wantYaw = lookYaw;
+  }
+  headYaw = approach(headYaw, clamp(wantYaw, -1.2, 1.2), 5, dt);
+  headPitch = approach(headPitch, wantPitch, 5, dt);
+
   var barkK = barkTimer > 0 ? Math.sin((0.34 - barkTimer) / 0.34 * Math.PI) : 0;
-  head.rotation.x = Math.sin(gait) * 0.05 * spdR + (DOG.grounded ? 0 : -0.18) - barkK * 0.45;
-  head.rotation.y = Math.sin(time * 0.7) * 0.07;
+  head.rotation.x = Math.sin(gait) * 0.05 * spdR + (DOG.grounded ? 0 : -0.18)
+                  - barkK * 0.45 + headPitch;
+  head.rotation.y = headYaw;
   mouth.scale.y = 0.4 + barkK * 0.95;
   mouth.scale.x = 0.76 + spdR * 0.1;
 
@@ -1612,19 +2157,36 @@ var lookNow = new T.Vector3();
 
 function updateCamera(dt) {
   var closeUp = (state === 'menu' || state === 'won');
+  // когато Кучо е в колибката, гледаме вратата отвън
+  var doorView = home.on && home.t > 0.45;
 
-  var fwdOnly = Math.max(0, input.mz);
-  if (state === 'playing' && !dragging && !touchMove && fwdOnly > 0) {
-    camYaw = lerpAngle(camYaw, DOG.yaw + Math.PI, (1 - Math.pow(0.12, dt)) * fwdOnly);
+  var tx, tz, ty, lookX, lookY, lookZ;
+
+  if (doorView) {
+    tx = HOUSE.outX + HOUSE.dirX * 2.6;
+    tz = HOUSE.outZ + HOUSE.dirZ * 2.6;
+    ty = HOUSE.groundY + 1.95;
+    lookX = HOUSE.x + HOUSE.dirX * 1.9;
+    lookY = HOUSE.groundY + 1.35;
+    lookZ = HOUSE.z + HOUSE.dirZ * 1.9;
+  } else {
+    var fwdOnly = Math.max(0, input.mz);
+    if (state === 'playing' && !dragging && !touchMove && fwdOnly > 0) {
+      camYaw = lerpAngle(camYaw, DOG.yaw + Math.PI, (1 - Math.pow(0.12, dt)) * fwdOnly);
+    }
+    if (closeUp) { camYaw += dt * 0.2; }
+
+    var dist = closeUp ? 8.8 : 9.4;
+    var height = closeUp ? 2.5 : 4.1;
+    tx = DOG.x + Math.sin(camYaw) * dist;
+    tz = DOG.z + Math.cos(camYaw) * dist;
+    ty = closeUp ? height : DOG.y * 0.45 + height;
+
+    var dogGround = terrainH(DOG.x, DOG.z);
+    lookX = DOG.x;
+    lookY = dogGround + DOG.y * 0.6 + (closeUp ? -0.45 : 1.25);
+    lookZ = DOG.z;
   }
-  if (closeUp) { camYaw += dt * 0.2; }
-
-  var dist = closeUp ? 8.8 : 9.4;
-  var height = closeUp ? 2.5 : 4.1;
-
-  var tx = DOG.x + Math.sin(camYaw) * dist;
-  var tz = DOG.z + Math.cos(camYaw) * dist;
-  var ty = closeUp ? height : DOG.y * 0.45 + height;
 
   var k = 1 - Math.pow(0.0009, dt);
   camera.position.x += (tx - camera.position.x) * k;
@@ -1643,7 +2205,7 @@ function updateCamera(dt) {
   }
 
   var dogGround = terrainH(DOG.x, DOG.z);
-  lookNow.set(DOG.x, dogGround + DOG.y * 0.6 + (closeUp ? -0.45 : 1.25), DOG.z);
+  lookNow.set(lookX, lookY, lookZ);
   var lk = 1 - Math.pow(0.0004, dt);
   camLook.x += (lookNow.x - camLook.x) * lk;
   camLook.y += (lookNow.y - camLook.y) * lk;
@@ -1678,15 +2240,56 @@ function updateWorld(dt, time) {
     if (c.position.x > 260) { c.position.x = -260; }
   }
 
+  // жабките подскачат от време на време
+  for (var fr = 0; fr < frogs.length; fr++) {
+    var F = frogs[fr];
+    if (F.t < 1) {
+      F.t = Math.min(1, F.t + dt / 0.42);
+      var e2 = Math.sin(F.t * Math.PI);
+      F.g.position.set(
+        F.fx + (F.tx - F.fx) * F.t,
+        terrainH(F.fx, F.fz) + Math.sin(F.t * Math.PI) * 0.45,
+        F.fz + (F.tz - F.fz) * F.t
+      );
+      F.g.scale.set(1 + (1 - e2) * 0.1, 1 - (1 - e2) * 0.12, 1 + (1 - e2) * 0.1);
+      if (F.t >= 1) { F.g.scale.set(1, 1, 1); }
+    } else {
+      F.wait -= dt;
+      if (F.wait <= 0) {
+        F.wait = rnd(3, 9);
+        F.fx = F.g.position.x; F.fz = F.g.position.z;
+        var ang2 = rnd(0, 6.3), dd = rnd(0.5, 1.6);
+        F.tx = F.fx + Math.cos(ang2) * dd;
+        F.tz = F.fz + Math.sin(ang2) * dd;
+        F.t = 0;
+      }
+    }
+  }
+
+  // рибките кръжат
+  for (var fi = 0; fi < fishes.length; fi++) {
+    var fi2 = fishes[fi];
+    fi2.a += dt * fi2.sp;
+    fi2.bob += dt * 1.7;
+    fi2.g.position.set(
+      POND.x + Math.cos(fi2.a) * fi2.r,
+      POND.level - fi2.y + Math.sin(fi2.bob) * 0.06,
+      POND.z + Math.sin(fi2.a) * fi2.r
+    );
+    fi2.g.rotation.y = -fi2.a + (fi2.sp > 0 ? -Math.PI / 2 : Math.PI / 2);
+    fi2.tail.rotation.z = Math.sin(time * 9 + fi2.bob) * 0.5;
+  }
+
   for (var b = 0; b < butterflies.length; b++) {
     var f = butterflies[b];
+    if (f.play) { continue; }          // тази, с която Кучо играе, се движи другаде
     f.t += dt * f.sp;
     var x = f.hx + Math.cos(f.t) * f.r;
     var z = f.hz + Math.sin(f.t * 1.3) * f.r * 0.8;
     var y = terrainH(x, z) + f.y + Math.sin(f.t * 2.7) * 0.5;
     f.g.position.set(x, y, z);
     f.g.rotation.set(0, -f.t * 0.6, Math.sin(f.t * 2.7) * 0.25);
-    var flap = Math.sin(time * f.flap) * 0.85;
+    var flap = 0.45 + 0.45 * Math.sin(time * f.flap);   // крилата махат нагоре, не под тялото
     f.wl.rotation.z = flap;
     f.wr.rotation.z = -flap;
   }
@@ -1737,6 +2340,7 @@ function frame() {
     mouth.scale.y = 0.55;
   }
 
+  updatePlay(dt, time);
   updateBones(dt, time);
   updatePool(sparks, dt, terrainH);
   updatePool(dust, dt, terrainH);
