@@ -1740,7 +1740,7 @@ var state = 'menu';                 // menu | playing | won
 var score = 0, elapsed = 0, finalTime = 0, barkTimer = 0, camYaw = Math.PI;
 var shake = 0;
 
-var DOG = { x: 0, y: 0, z: 0, yaw: 0, vy: 0, speed: 0, grounded: true, airT: 0 };
+var DOG = { x: 0, y: 0, z: 0, yaw: 0, vy: 0, speed: 0, grounded: true, airT: 0, airDur: 0.72 };
 var stepPhase = 0, dustTimer = 0, blinkTimer = rnd(2, 5), blink = 0;
 var squash = 0;                                  // >0 разтегнато, <0 смачкано
 var lookYaw = 0, lookTimer = rnd(2, 4);
@@ -1920,7 +1920,7 @@ window.addEventListener('pointercancel', function () { dragging = false; });
    програмата не я мести сама, иначе се бият и изглежда странно. */
 function dragCamera(dx, dy) {
   camYaw -= dx * 0.0055;
-  camPitch = clamp(camPitch - dy * 0.0038, 0.1, 1.12);
+  camPitch = clamp(camPitch + dy * 0.0038, 0.1, 1.12);
   camManual = 2.5;
 }
 
@@ -1971,7 +1971,7 @@ function toast(text) {
 function resetGame() {
   score = 0; elapsed = 0; finalTime = 0; barkTimer = 0; shake = 0;
   DOG.x = 0; DOG.y = 0; DOG.z = 0; DOG.yaw = 0;
-  DOG.vy = 0; DOG.speed = 0; DOG.grounded = true; DOG.airT = 0;
+  DOG.vy = 0; DOG.speed = 0; DOG.grounded = true; DOG.airT = 0; DOG.airDur = 0.72;
   camYaw = Math.PI;
   stick.x = 0; stick.y = 0;
   squash = 0;
@@ -2097,6 +2097,7 @@ function updatePlay(dt, time) {
     DOG.vy = 4.4;
     DOG.grounded = false;
     DOG.airT = 0;
+    DOG.airDur = 2 * DOG.vy / 30;
     squash = 0.7;
     bark(rnd(1.15, 1.4));
   }
@@ -2145,6 +2146,7 @@ function updateDog(dt, time) {
     DOG.vy = 10.8;
     DOG.grounded = false;
     DOG.airT = 0;
+    DOG.airDur = 2 * DOG.vy / 30;        // колко ще е дълъг полетът
     squash = 1.0;                        // разтегля се при отскок
     step(0.22);
   }
@@ -2199,7 +2201,7 @@ function updateDog(dt, time) {
   } else {
     /* Във въздуха Кучо скача като куче: първо прибира предните крака,
        после задните, а преди да кацне подава предните напред. */
-    var p = clamp(DOG.airT / 0.72, 0, 1);
+    var p = clamp(DOG.airT / DOG.airDur, 0, 1);
     var frontTuck = clamp(p / 0.2, 0, 1);
     var pushOff = clamp(p / 0.3, 0, 1);
     var backTuck = clamp((p - 0.25) / 0.35, 0, 1);
@@ -2246,14 +2248,15 @@ function updateDog(dt, time) {
   // свиване и разтягане — тялото диша с движението
   dogBody.scale.set(1 - squash * 0.1, 1 + squash * 0.13, 1 - squash * 0.1);
 
-  // във въздуха вдига предната част на тялото, после я отпуска за приземяването
-  var jp = clamp(DOG.airT / 0.72, 0, 1);
+  // във въздуха вдига предната част, а при слизане я спуска първа —
+  // затова предните лапи стигат земята преди задните
+  var jp = clamp(DOG.airT / DOG.airDur, 0, 1);
   var upK = clamp((jp - 0.08) / 0.34, 0, 1);
-  var downK = clamp((jp - 0.62) / 0.38, 0, 1);
+  var downK = clamp((jp - 0.5) / 0.5, 0, 1);
 
   dogTilt.rotation.x = DOG.grounded
     ? Math.min(0.1, spd * 0.009) + Math.sin(gait * 0.5) * 0.018 * spdR
-    : -0.13 - 0.24 * upK + 0.52 * downK;
+    : -0.14 - 0.26 * upK + 0.88 * downK;
   dogTilt.rotation.z = Math.sin(gait * 0.5) * 0.035 * spdR;
 
   // опашка — трите части махат с малко закъснение
