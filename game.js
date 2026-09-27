@@ -167,8 +167,11 @@ var clouds = [];
 (function makeClouds() {
   var mat = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.93, fog: false });
   var matLow = new T.MeshBasicMaterial({ color: 0xdfeaf7, transparent: true, opacity: 0.9, fog: false });
+  var matFar = new T.MeshBasicMaterial({ color: 0xeaf2fb, transparent: true, opacity: 0.7, fog: false });
   var geo = new T.SphereGeometry(1, 10, 8);
-  for (var i = 0; i < 15; i++) {
+
+  // високи, ясно очертани облаци
+  for (var i = 0; i < 22; i++) {
     var g = new T.Group();
     var puffs = 5 + ((Math.random() * 4) | 0);
     for (var k = 0; k < puffs; k++) {
@@ -178,11 +181,55 @@ var clouds = [];
       m.scale.set(r, r * rnd(0.42, 0.62), r * rnd(0.75, 1.1));
       g.add(m);
     }
-    var ang = rnd(0, Math.PI * 2), dist = rnd(60, 210);
-    g.position.set(Math.cos(ang) * dist, rnd(58, 104), Math.sin(ang) * dist);
+    var ang = rnd(0, Math.PI * 2), dist = rnd(60, 220);
+    g.position.set(Math.cos(ang) * dist, rnd(56, 108), Math.sin(ang) * dist);
     scene.add(g);
     clouds.push(g);
   }
+
+  // ниски и далечни — сливат се с мъглата на хоризонта
+  for (var j = 0; j < 16; j++) {
+    var g2 = new T.Group();
+    var puffs2 = 4 + ((Math.random() * 3) | 0);
+    for (var k2 = 0; k2 < puffs2; k2++) {
+      var r2 = rnd(9, 18);
+      var m2 = new T.Mesh(geo, matFar);
+      m2.position.set(rnd(-22, 22), rnd(-3, 3), rnd(-10, 10));
+      m2.scale.set(r2, r2 * rnd(0.3, 0.45), r2 * rnd(0.7, 1.0));
+      g2.add(m2);
+    }
+    var ang2 = rnd(0, Math.PI * 2), dist2 = rnd(150, 280);
+    g2.position.set(Math.cos(ang2) * dist2, rnd(34, 66), Math.sin(ang2) * dist2);
+    scene.add(g2);
+    clouds.push(g2);
+  }
+})();
+
+// мъгла по хоризонта — широк пръстен, който следва камерата.
+// Така земята и небето не се срещат на рязко, а преливат.
+var hazeMesh = (function makeHaze() {
+  var c = document.createElement('canvas');
+  c.width = 4; c.height = 128;
+  var g = c.getContext('2d');
+  var grad = g.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0.00, 'rgba(214,232,248,0)');     // горе се стопява в небето
+  grad.addColorStop(0.30, 'rgba(216,233,248,0.3)');
+  grad.addColorStop(0.55, 'rgba(224,237,249,0.72)');
+  grad.addColorStop(0.78, 'rgba(236,243,250,0.96)');
+  grad.addColorStop(1.00, 'rgba(245,248,252,1)');     // долу е най-гъсто
+  g.fillStyle = grad; g.fillRect(0, 0, 4, 128);
+
+  var tex = new T.CanvasTexture(c);
+  if (T.sRGBEncoding !== undefined) { tex.encoding = T.sRGBEncoding; }
+  var mesh = new T.Mesh(
+    new T.CylinderGeometry(195, 195, 90, 36, 1, true),
+    new T.MeshBasicMaterial({
+      map: tex, transparent: true, side: T.BackSide,
+      depthWrite: false, fog: false
+    })
+  );
+  scene.add(mesh);
+  return mesh;
 })();
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1737,6 +1784,8 @@ function doBark() {
 
 var stick = { x: 0, y: 0 };          // −1..1
 var touchRun = false, touchJump = false;
+var camPitch = 0.42;                 // наклон на камерата, 0 = равно, 1.12 = отгоре
+var camManual = 0;                   // колко още не пипаме камерата автоматично
 
 var stickEl = document.getElementById('stick');
 var knobEl = document.getElementById('knob');
@@ -1758,7 +1807,7 @@ function onTouchDown(e) {
     stickEl.classList.add('on');
     knobEl.style.transform = 'translate(-50%,-50%)';
   } else if (camTouch === null) {
-    camTouch = { id: id, x0: t.clientX };
+    camTouch = { id: id, x0: t.clientX, y0: t.clientY };
   }
 }
 
@@ -1775,8 +1824,9 @@ function onTouchMove(e) {
       stick.x = dx / STICK_R;
       stick.y = dy / STICK_R;
     } else if (camTouch && camTouch.id === id) {
-      camYaw -= (t.clientX - camTouch.x0) * 0.008;
+      dragCamera((t.clientX - camTouch.x0) * 1.5, (t.clientY - camTouch.y0) * 1.5);
       camTouch.x0 = t.clientX;
+      camTouch.y0 = t.clientY;
     }
   }
   if (e.cancelable) { e.preventDefault(); }
@@ -1848,20 +1898,31 @@ function setTouch(on) {
 
 /* ---------- мишка (само на компютър) ---------- */
 
-var dragging = false, lastX = 0;
+var dragging = false, lastX = 0, lastY = 0;
 
 renderer.domElement.addEventListener('pointerdown', function (e) {
   if (isTouch || e.pointerType === 'touch') { return; }
   dragging = true;
   lastX = e.clientX;
+  lastY = e.clientY;
 });
 window.addEventListener('pointermove', function (e) {
   if (!dragging || isTouch) { return; }
-  camYaw -= (e.clientX - lastX) * 0.0055;
+  dragCamera(e.clientX - lastX, e.clientY - lastY);
   lastX = e.clientX;
+  lastY = e.clientY;
 });
 window.addEventListener('pointerup', function () { dragging = false; });
 window.addEventListener('pointercancel', function () { dragging = false; });
+
+/* Едно място, през което минава всяко ръчно завъртане на камерата.
+   Записва и че играчът я е пипал — през следващите 2.5 секунди
+   програмата не я мести сама, иначе се бият и изглежда странно. */
+function dragCamera(dx, dy) {
+  camYaw -= dx * 0.0055;
+  camPitch = clamp(camPitch - dy * 0.0038, 0.1, 1.12);
+  camManual = 2.5;
+}
 
 /* ══════════════════════════════════════════════════════════════════════════
    12. HUD
@@ -1916,6 +1977,7 @@ function resetGame() {
   squash = 0;
   headYaw = 0; headPitch = 0;
   lookYaw = 0; lookTimer = rnd(2, 4);
+  camPitch = 0.42; camManual = 0;
   home.on = false; home.t = 1; home.dir = 1;
   play.on = false; play.t = 0; play.next = rnd(7, 14);
   if (play.bf) { play.bf.play = false; play.bf = null; }
@@ -2184,9 +2246,14 @@ function updateDog(dt, time) {
   // свиване и разтягане — тялото диша с движението
   dogBody.scale.set(1 - squash * 0.1, 1 + squash * 0.13, 1 - squash * 0.1);
 
+  // във въздуха вдига предната част на тялото, после я отпуска за приземяването
+  var jp = clamp(DOG.airT / 0.72, 0, 1);
+  var upK = clamp((jp - 0.08) / 0.34, 0, 1);
+  var downK = clamp((jp - 0.62) / 0.38, 0, 1);
+
   dogTilt.rotation.x = DOG.grounded
     ? Math.min(0.1, spd * 0.009) + Math.sin(gait * 0.5) * 0.018 * spdR
-    : -0.3 + 0.62 * clamp(DOG.airT / 0.72, 0, 1);      // носете нагоре при отскок, после надолу
+    : -0.13 - 0.24 * upK + 0.52 * downK;
   dogTilt.rotation.z = Math.sin(gait * 0.5) * 0.035 * spdR;
 
   // опашка — трите части махат с малко закъснение
@@ -2347,19 +2414,24 @@ function updateCamera(dt) {
     lookY = HOUSE.groundY + 1.5;
     lookZ = HOUSE.z + HOUSE.dirZ * 1.5;
   } else {
+    // авто-завъртане зад Кучо, но само ако играчът не е пипал камерата скоро
+    if (camManual > 0) { camManual = Math.max(0, camManual - dt); }
+
     var fwdOnly = Math.max(0, input.mz);
-    if (state === 'playing' && !dragging && !touchMove && fwdOnly > 0) {
-      camYaw = lerpAngle(camYaw, DOG.yaw + Math.PI, (1 - Math.pow(0.12, dt)) * fwdOnly);
+    if (state === 'playing' && camManual <= 0 && !dragging && !touchMove && fwdOnly > 0) {
+      camYaw = lerpAngle(camYaw, DOG.yaw + Math.PI, (1 - Math.pow(0.35, dt)) * fwdOnly);
     }
-    if (closeUp) { camYaw += dt * 0.2; }
+    if (closeUp && camManual <= 0) { camYaw += dt * 0.2; }
 
     var dist = closeUp ? 8.8 : 9.4;
-    var height = closeUp ? 2.5 : 4.1;
-    tx = DOG.x + Math.sin(camYaw) * dist;
-    tz = DOG.z + Math.cos(camYaw) * dist;
-    ty = closeUp ? height : DOG.y * 0.45 + height;
+    var pitch = closeUp ? 0.29 : camPitch;
+    var cosP = Math.cos(pitch), sinP = Math.sin(pitch);
+
+    tx = DOG.x + Math.sin(camYaw) * dist * cosP;
+    tz = DOG.z + Math.cos(camYaw) * dist * cosP;
 
     var dogGround = terrainH(DOG.x, DOG.z);
+    ty = dogGround + DOG.y * 0.45 + dist * sinP;
     lookX = DOG.x;
     lookY = dogGround + DOG.y * 0.6 + (closeUp ? -0.45 : 1.25);
     lookZ = DOG.z;
@@ -2382,7 +2454,6 @@ function updateCamera(dt) {
     shake *= Math.pow(0.02, dt);
   }
 
-  var dogGround = terrainH(DOG.x, DOG.z);
   lookNow.set(lookX, lookY, lookZ);
   var lk = home.on ? (1 - Math.pow(0.16, dt)) : (1 - Math.pow(0.0004, dt));
   camLook.x += (lookNow.x - camLook.x) * lk;
@@ -2399,11 +2470,12 @@ function updateCamera(dt) {
 
   // слънцето следва Кучо
   sun.position.set(DOG.x + 26, 44, DOG.z + 20);
-  sun.target.position.set(DOG.x, dogGround, DOG.z);
+  sun.target.position.set(DOG.x, terrainH(DOG.x, DOG.z), DOG.z);
   sun.target.updateMatrixWorld();
 
-  // слънчевият диск и облаците следват камерата, за да не се стига до ръба на небето
+  // слънчевият диск и мъглата следват камерата, за да не се стига до ръба на небето
   sunSprite.position.copy(camera.position).addScaledVector(SUN_DIR, 300);
+  hazeMesh.position.set(camera.position.x, camera.position.y + 12, camera.position.z);
 }
 
 /* ---------- свят около Кучо ---------- */
