@@ -98,8 +98,9 @@ kbd{
 
 /* ───────────── екрани ───────────── */
 .screen{
-  position:fixed;inset:0;z-index:10;display:grid;
-  justify-items:center;align-items:flex-end;padding-bottom:3.5vh;
+  position:fixed;inset:0;z-index:10;
+  display:flex;justify-content:center;align-items:flex-end;
+  padding:0 14px 3.5vh;box-sizing:border-box;
   background:radial-gradient(120% 95% at 50% 0%,rgba(255,255,255,.2),rgba(6,24,44,.5));
   backdrop-filter:blur(2px);transition:opacity .4s ease;
 }
@@ -107,7 +108,8 @@ kbd{
 
 .panel{
   background:rgba(255,255,255,.95);border-radius:26px;padding:24px 40px 26px;
-  text-align:center;max-width:min(92vw,480px);
+  text-align:center;width:100%;max-width:480px;box-sizing:border-box;
+  overflow-wrap:break-word;
   box-shadow:0 28px 70px rgba(6,24,44,.36);
 }
 .panel h1{margin:0;font-size:30px;letter-spacing:-.6px}
@@ -169,12 +171,15 @@ body.touch .hint{display:none}
 }
 
 @media (max-width:780px){
-  .chip{font-size:14px;padding:7px 13px}
-  .compass{width:56px;height:56px}
-  .compass .needle{font-size:19px}
-  .panel{padding:20px 24px 22px;border-radius:22px}
+  .chip{font-size:13px;padding:6px 12px}
+  .compass{width:52px;height:52px}
+  .compass .needle{font-size:18px}
+  .panel{padding:18px 18px 20px;border-radius:22px}
   .panel h1{font-size:26px}
   .panel p{font-size:14px}
-  .face{font-size:40px}
-  .big{font-size:38px}
+  .face{font-size:38px}
+  .big{font-size:36px}
+  .controls{font-size:12.5px;line-height:1.95}
+  .btn{padding:14px 26px;font-size:16px}
+  .btn.ghost{margin-left:8px;padding:14px 20px}
 }
